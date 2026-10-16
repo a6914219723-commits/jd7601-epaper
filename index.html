@@ -1,0 +1,435 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#f3f5f8">
+<title>JD7601 墨水屏</title>
+<style>
+:root{font-family:system-ui,-apple-system,"Noto Sans SC",sans-serif;color:#172033;background:#f3f5f8;color-scheme:light}
+*{box-sizing:border-box}
+body{margin:0;padding:18px 14px 40px;max-width:760px;margin-inline:auto}
+header{padding:10px 3px 18px}
+h1{font-size:1.55rem;margin:0 0 7px;letter-spacing:-.02em}
+.subtitle{color:#667085;font-size:.92rem;line-height:1.55;margin:0}
+.card{background:#fff;border:1px solid #e1e6ee;border-radius:18px;padding:16px;margin:12px 0;box-shadow:0 3px 14px #192b4608}
+.cardhead{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.num{display:grid;place-items:center;width:34px;height:34px;flex:0 0 34px;border-radius:11px;background:#eaf0ff;color:#2458cf;font-weight:800}
+h2{font-size:1.08rem;margin:0}
+.desc{color:#697586;font-size:.88rem;line-height:1.5;margin:4px 0 0}
+button,.filebutton{border:0;border-radius:12px;padding:12px 15px;background:#2458cf;color:white;font-size:.96rem;font-weight:700;cursor:pointer;display:inline-flex;justify-content:center;align-items:center;gap:8px;min-height:46px}
+button:disabled{opacity:.42;cursor:not-allowed}
+.secondary{background:#edf1f7;color:#243047}
+.outline{background:white;color:#2458cf;border:1px solid #cbd7f5}
+.full{width:100%}
+.row{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
+.status{display:flex;align-items:center;gap:8px;color:#68758a;font-size:.9rem;margin:12px 0}
+.dot{width:9px;height:9px;border-radius:50%;background:#9aa5b5;display:inline-block}
+.dot.ok{background:#16a36a}
+.hidden{display:none!important}
+#file{display:none}
+canvas{display:block;width:100%;height:auto;border-radius:10px;background:#eef1f4}
+select{grid-column:1/-1;width:100%;min-height:42px;padding:8px 10px;border:1px solid #d4dbe6;border-radius:9px;background:#fff;color:#172033;font:inherit}
+.controlrow.selectrow{grid-template-columns:1fr}
+.previewframe{background:#e5e7eb;padding:8px;border-radius:12px;max-width:420px;margin:0 auto}
+.controls{display:grid;grid-template-columns:1fr;gap:14px;margin:14px 0}
+.controlrow{display:grid;grid-template-columns:1fr auto;gap:5px 12px;align-items:center}
+.controlrow label{font-weight:650;font-size:.92rem}
+.controlrow output{font-variant-numeric:tabular-nums;color:#2458cf;font-size:.9rem}
+input[type=range]{grid-column:1/-1;width:100%;accent-color:#2458cf}
+.note{font-size:.85rem;color:#6b7280;line-height:1.55}
+progress{width:100%;height:16px;margin-top:10px;accent-color:#2458cf}
+#log{white-space:pre-wrap;word-break:break-word;font-size:.84rem;background:#111827;color:#dce7ff;padding:12px;border-radius:10px;min-height:42px}
+.stepcontent{margin-top:10px}
+.stepstatus{font-size:.78rem;color:#7a8495;margin-left:auto}
+.badge{display:inline-flex;padding:4px 8px;border-radius:99px;background:#f0f3f8;color:#596579;font-size:.78rem}
+.modal{position:fixed;inset:0;background:#0b1220dd;z-index:10;display:flex;align-items:center;justify-content:center;padding:14px}
+.modalpanel{width:min(100%,560px);max-height:95dvh;overflow:auto;background:#fff;border-radius:18px;padding:16px}
+.cropstage{width:min(100%,calc(60dvh * 2 / 3));aspect-ratio:2/3;height:auto;max-height:60dvh;background:#111827;border:2px solid #e2e8f0;border-radius:12px;position:relative;overflow:hidden;touch-action:none;margin:12px auto}
+#cropCanvas{width:100%;height:100%;display:block}
+.cropactions{display:flex;justify-content:center;gap:8px;margin:8px 0}
+.cropactions button{min-height:40px;padding:8px 12px}
+.crophelp{font-size:.85rem;color:#64748b;line-height:1.5}
+.modalhead{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.modalhead h2{font-size:1.1rem}
+button:focus-visible,input:focus-visible{outline:3px solid #9cb8ff;outline-offset:2px}
+@media(min-width:600px){body{padding-top:28px}.controls{grid-template-columns:1fr 1fr}.controlrow{padding:8px;border:1px solid #edf0f5;border-radius:12px}}
+</style>
+</head>
+<body>
+<header>
+  <h1>JD7601 墨水屏</h1>
+  <p class="subtitle">手机选图 · 固定比例裁切 · 手动预览 · BLE 传图</p>
+</header>
+
+<section class="card" id="step1">
+  <div class="cardhead"><div class="num">1</div><div><h2>设备连接</h2><p class="desc">连接已上电的 ESP32-S3 墨水屏设备。</p></div><span class="stepstatus" id="step1status">未连接</span></div>
+  <div class="row"><button id="connect">连接设备</button><button id="disconnect" class="secondary" disabled>断开连接</button></div>
+  <div class="status"><span class="dot" id="connDot"></span><span id="connText">尚未连接 · 设备名 JD7601-EPAPER</span></div>
+</section>
+
+<section class="card" id="step2">
+  <div class="cardhead"><div class="num">2</div><div><h2>选择照片</h2><p class="desc">选择图片后会进入固定 2:3 屏幕比例裁切。</p></div><span class="stepstatus" id="step2status">未选择</span></div>
+  <input id="file" type="file" accept="image/*">
+  <button id="choose" class="full">选择照片</button>
+  <div id="selectedInfo" class="note hidden" style="margin-top:10px"></div>
+</section>
+
+<section class="card hidden" id="step3">
+  <div class="cardhead"><div class="num">3</div><div><h2>画面预览及调整</h2><p class="desc">调整后需手动点击“重新加载预览”，不会实时刷新。</p></div><span class="stepstatus" id="step3status">待预览</span></div>
+  <div class="previewframe"><canvas id="preview" width="480" height="720" aria-label="墨水屏效果预览"></canvas></div>
+  <div class="controls">
+    <div class="controlrow"><label for="brightness">亮度</label><output id="brightnessVal">0</output><input id="brightness" type="range" min="-60" max="60" value="0" step="1"></div>
+    <div class="controlrow"><label for="contrast">对比度</label><output id="contrastVal">100%</output><input id="contrast" type="range" min="50" max="180" value="100" step="1"></div>
+    <div class="controlrow"><label for="saturation">饱和度</label><output id="saturationVal">100%</output><input id="saturation" type="range" min="0" max="200" value="100" step="1"></div>
+    <div class="controlrow selectrow"><label for="dither">像素抖动算法</label><select id="dither"><option value="floyd">Floyd–Steinberg 误差扩散（推荐照片）</option><option value="bayer">Bayer 有序抖动（规则网点）</option></select></div>
+  </div>
+  <p class="note">Floyd–Steinberg 会把量化误差扩散到邻近像素，适合照片渐变；Bayer 会形成规则网点。六色发送预览显示编码后实际发送的像素，手机缩放可能造成色彩摩尔纹。</p>
+  <div class="row"><button id="reloadPreview" class="full">生成六色发送预览</button><button id="resetAdjust" class="secondary">重置调整</button></div>
+  <div class="row" style="margin-top:8px"><button id="showSource" class="secondary">查看调整后原图</button><button id="showEpd" class="outline">查看六色发送效果</button><button id="testPreview" class="secondary">预览六色测试图</button></div>
+</section>
+
+<section class="card hidden" id="step4">
+  <div class="cardhead"><div class="num">4</div><div><h2>发送到墨水屏</h2><p class="desc">发送当前已加载预览对应的图像数据。</p></div><span class="stepstatus" id="step4status">待发送</span></div>
+  <div class="row"><button id="send" class="full" disabled>发送当前图像</button><button id="sendTest" class="outline full" disabled>发送六色测试图</button></div>
+  <progress id="progress" max="100" value="0"></progress>
+  <p id="progressText" class="note">请先完成预览并连接设备。</p>
+</section>
+
+<section class="card">
+  <h2 style="margin-bottom:10px">运行日志</h2><div id="log">就绪。建议先连接设备，再选择照片。</div>
+</section>
+
+<div id="cropModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="cropTitle">
+  <div class="modalpanel">
+    <div class="modalhead"><h2 id="cropTitle">裁切照片（固定 2:3）</h2><button id="cancelCrop" class="secondary">取消</button></div>
+    <p class="crophelp">原图像素不会因导入而改写。拖动或缩放原图，在固定 480:720（2:3）裁切框内取景；可每次旋转 90°。最终仅将选区生成 480×720 发送帧。</p>
+    <div class="cropstage" id="cropStage"><canvas id="cropCanvas" width="480" height="720"></canvas></div>
+    <div class="cropactions"><button id="rotateLeft" class="secondary" type="button">↶ 左转 90°</button><button id="rotateRight" class="secondary" type="button">↷ 右转 90°</button></div>
+    <div class="controlrow"><label for="zoom">缩放</label><output id="zoomVal">100%</output><input id="zoom" type="range" min="100" max="250" value="100" step="1"></div>
+    <div class="row" style="margin-top:14px"><button id="confirmCrop" class="full">确认裁切并返回</button></div>
+  </div>
+</div>
+
+<script>
+(() => {
+'use strict';
+const SERVICE='01000001-7620-4ea1-9147-6f3a114c5d8a';
+const CONTROL='02000001-7620-4ea1-9147-6f3a114c5d8a';
+const DATA='03000001-7620-4ea1-9147-6f3a114c5d8a';
+const STATUS='04000001-7620-4ea1-9147-6f3a114c5d8a';
+const START_COMMAND=0x01;
+const W=480,H=720,FRAME_BYTES=W*H/2;
+const colors=[
+ {code:0,r:0,g:0,b:0},{code:1,r:255,g:255,b:255},
+ {code:2,r:245,g:205,b:0},{code:3,r:200,g:25,b:25},
+ {code:5,r:35,g:90,b:190},{code:6,r:30,g:130,b:70}
+];
+const bayer=[[0,8,2,10],[12,4,14,6],[3,11,1,9],[15,7,13,5]];
+const $=id=>document.getElementById(id);
+let device=null,server=null,controlChar=null,dataChar=null,statusChar=null;
+let originalImage=null,cropImageCanvas=null,loadedFrame=null,imageReady=false;
+let cropScale=1,cropX=0,cropY=0,cropBase=1,rotation=0,drag=null,previewNeedsReload=true;
+let previewMode='epd',testFrame=null;
+
+function log(s){$('log').textContent=s}
+function setConnected(yes,text){
+ $('connText').textContent=text;$('connDot').classList.toggle('ok',yes);
+ $('disconnect').disabled=!yes;$('connect').disabled=!!yes;
+ $('step1status').textContent=yes?'已连接':'未连接';
+ $('send').disabled=!(yes&&imageReady&&loadedFrame&&!previewNeedsReload);
+ $('sendTest').disabled=!yes;
+}
+function revealLaterSteps(){
+ $('step3').classList.remove('hidden');$('step4').classList.remove('hidden');
+ $('step3').scrollIntoView({behavior:'smooth',block:'start'});
+}
+function setAdjustmentOutputs(){
+ $('brightnessVal').textContent=$('brightness').value;
+ $('contrastVal').textContent=$('contrast').value+'%';
+ $('saturationVal').textContent=$('saturation').value+'%';
+ previewNeedsReload=true;$('step3status').textContent='参数已修改';
+ $('step4status').textContent='预览待更新';$('send').disabled=true;
+}
+['brightness','contrast','saturation'].forEach(id=>$(id).addEventListener('input',setAdjustmentOutputs));
+$('dither').addEventListener('change',setAdjustmentOutputs);
+
+$('choose').addEventListener('click',()=>$('file').click());
+$('file').addEventListener('change',()=>{
+ const file=$('file').files&&$('file').files[0];if(!file)return;
+ imageReady=false;loadedFrame=null;previewNeedsReload=true;$('send').disabled=true;
+ $('step3status').textContent='待裁切';$('step4status').textContent='待生成预览';
+ const url=URL.createObjectURL(file),img=new Image();
+ $('file').value='';
+ img.onload=()=>{
+   originalImage=img;
+   $('selectedInfo').classList.remove('hidden');
+   $('selectedInfo').textContent=`原图：${file.name} · ${img.naturalWidth} × ${img.naturalHeight} 像素 · ${(file.size/1024).toFixed(1)} KB。导入不会改写原图。`;
+   $('step2status').textContent='原图已载入';
+   openCrop();
+   URL.revokeObjectURL(url);
+ };
+ img.onerror=()=>{URL.revokeObjectURL(url);alert('图片读取失败，请换一张图片。')};
+ img.src=url;
+});
+
+function openCrop(){
+ $('cropModal').classList.remove('hidden');
+ $('zoom').value=100;$('zoomVal').textContent='100%';
+ rotation=0;positionCrop(1);
+ renderCrop();
+}
+function rotatedSize(){
+ const swap=rotation%180!==0;
+ return {width:swap?originalImage.naturalHeight:originalImage.naturalWidth,
+         height:swap?originalImage.naturalWidth:originalImage.naturalHeight};
+}
+function positionCrop(zoomRatio){
+ const c=$('cropCanvas'),size=rotatedSize();
+ cropBase=Math.max(c.width/size.width,c.height/size.height);
+ cropScale=cropBase*zoomRatio;
+ cropX=(c.width-size.width*cropScale)/2;
+ cropY=(c.height-size.height*cropScale)/2;
+ $('zoom').value=Math.round(zoomRatio*100);
+ $('zoomVal').textContent=$('zoom').value+'%';
+}
+function rotateCrop(delta){
+ if(!originalImage)return;
+ const zoomRatio=cropScale/cropBase;
+ rotation=(rotation+delta+360)%360;
+ positionCrop(zoomRatio);renderCrop();
+ $('step2status').textContent=`原图已载入 · 旋转 ${rotation}°`;
+}
+function clampCrop(){
+ const c=$('cropCanvas'),size=rotatedSize(),w=size.width*cropScale,h=size.height*cropScale;
+ if(w<c.width)cropX=(c.width-w)/2;else cropX=Math.min(0,Math.max(c.width-w,cropX));
+ if(h<c.height)cropY=(c.height-h)/2;else cropY=Math.min(0,Math.max(c.height-h,cropY));
+}
+function renderCrop(){
+ const c=$('cropCanvas'),ctx=c.getContext('2d');
+ ctx.fillStyle='#111827';ctx.fillRect(0,0,c.width,c.height);
+ clampCrop();
+ const size=rotatedSize(),cx=cropX+size.width*cropScale/2,cy=cropY+size.height*cropScale/2;
+ ctx.save();ctx.translate(cx,cy);ctx.rotate(rotation*Math.PI/180);
+ ctx.drawImage(originalImage,-originalImage.naturalWidth*cropScale/2,-originalImage.naturalHeight*cropScale/2,
+               originalImage.naturalWidth*cropScale,originalImage.naturalHeight*cropScale);
+ ctx.restore();
+}
+$('zoom').addEventListener('input',()=>{
+ const v=Number($('zoom').value)/100;
+ const old=cropScale;cropScale=cropBase*v;
+ const cx=$('cropCanvas').width/2,cy=$('cropCanvas').height/2;
+ cropX=cx-(cx-cropX)*(cropScale/old);cropY=cy-(cy-cropY)*(cropScale/old);
+ $('zoomVal').textContent=$('zoom').value+'%';renderCrop();
+});
+$('rotateLeft').onclick=()=>rotateCrop(-90);
+$('rotateRight').onclick=()=>rotateCrop(90);
+const cropCanvas=$('cropCanvas');
+cropCanvas.addEventListener('pointerdown',e=>{drag={x:e.clientX,y:e.clientY,cx:cropX,cy:cropY};cropCanvas.setPointerCapture(e.pointerId)});
+cropCanvas.addEventListener('pointermove',e=>{
+ if(!drag)return;const rect=cropCanvas.getBoundingClientRect();
+ cropX=drag.cx+(e.clientX-drag.x)*cropCanvas.width/rect.width;
+ cropY=drag.cy+(e.clientY-drag.y)*cropCanvas.height/rect.height;renderCrop();
+});
+cropCanvas.addEventListener('pointerup',()=>drag=null);
+cropCanvas.addEventListener('pointercancel',()=>drag=null);
+$('cancelCrop').onclick=()=>{$('cropModal').classList.add('hidden');};
+$('confirmCrop').onclick=()=>{
+ const c=document.createElement('canvas');c.width=W;c.height=H;
+ c.getContext('2d').drawImage($('cropCanvas'),0,0);
+ cropImageCanvas=c;
+ $('cropModal').classList.add('hidden');
+ $('step2status').textContent=`裁切完成 · ${W}×${H}`;
+ revealLaterSteps();
+ loadedFrame=null;imageReady=true;previewNeedsReload=true;
+ $('step3status').textContent='等待手动预览';
+ $('step4status').textContent='待发送';
+ $('send').disabled=true;
+ log('裁切已完成。请调整亮度、对比度和饱和度，然后手动重新加载预览。');
+};
+
+function applyAdjustments(){
+ const srcctx=cropImageCanvas.getContext('2d',{willReadFrequently:true});
+ const src=srcctx.getImageData(0,0,W,H),data=src.data;
+ const brightness=Number($('brightness').value);
+ const contrast=Number($('contrast').value)/100;
+ const saturation=Number($('saturation').value)/100;
+ for(let i=0;i<data.length;i+=4){
+  let r=data[i]+brightness,g=data[i+1]+brightness,b=data[i+2]+brightness;
+  r=(r-128)*contrast+128;g=(g-128)*contrast+128;b=(b-128)*contrast+128;
+  const gray=.299*r+.587*g+.114*b;
+  r=gray+(r-gray)*saturation;g=gray+(g-gray)*saturation;b=gray+(b-gray)*saturation;
+  data[i]=Math.max(0,Math.min(255,r));data[i+1]=Math.max(0,Math.min(255,g));data[i+2]=Math.max(0,Math.min(255,b));
+ }
+ return data;
+}
+function nearestTwo(r,g,b){
+ let best=null,second=null;
+ for(const c of colors){
+  const d=(r-c.r)**2+(g-c.g)**2+(b-c.b)**2;
+  if(!best||d<best.d){second=best;best={c,d};}
+  else if(!second||d<second.d)second={c,d};
+ }
+ return {best,second};
+}
+function nearestColor(r,g,b){
+ let best=null;
+ for(const c of colors){
+  const d=(r-c.r)**2+(g-c.g)**2+(b-c.b)**2;
+  if(!best||d<best.d)best={c,d};
+ }
+ return best.c;
+}
+function storePixel(out,x,y,code){
+ // The JD7601 consumes 480 scan lines of 720 pixels each. The portrait
+ // canvas is therefore serialized by column, with y varying within a line.
+ const p=x*H+y;
+ const bi=p>>1;
+ if((p&1)===0)out[bi]=code<<4;else out[bi]|=code;
+}
+function buildFrame(){
+ const data=applyAdjustments(),out=new Uint8Array(FRAME_BYTES);
+ if($('dither').value==='bayer'){
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+   const i=(y*W+x)*4,r=data[i],g=data[i+1],b=data[i+2];
+   const pair=nearestTwo(r,g,b);let chosen=pair.best.c;
+   const total=pair.best.d+(pair.second?pair.second.d:0);
+   const probability=total===0?0:pair.best.d/total;
+   if(pair.second&&((bayer[y&3][x&3]+.5)/16<probability))chosen=pair.second.c;
+   storePixel(out,x,y,chosen.code);
+  }
+ }else{
+  let curR=new Float32Array(W+2),curG=new Float32Array(W+2),curB=new Float32Array(W+2);
+  let nextR=new Float32Array(W+2),nextG=new Float32Array(W+2),nextB=new Float32Array(W+2);
+  for(let y=0;y<H;y++){
+   for(let x=0;x<W;x++){
+    const i=(y*W+x)*4,slot=x+1;
+    const r=Math.max(0,Math.min(255,data[i]+curR[slot]));
+    const g=Math.max(0,Math.min(255,data[i+1]+curG[slot]));
+    const b=Math.max(0,Math.min(255,data[i+2]+curB[slot]));
+    const chosen=nearestColor(r,g,b);
+    storePixel(out,x,y,chosen.code);
+    const er=r-chosen.r,eg=g-chosen.g,eb=b-chosen.b;
+    if(x+1<W){curR[slot+1]+=er*7/16;curG[slot+1]+=eg*7/16;curB[slot+1]+=eb*7/16;}
+    if(y+1<H){
+     if(x>0){nextR[slot-1]+=er*3/16;nextG[slot-1]+=eg*3/16;nextB[slot-1]+=eb*3/16;}
+     nextR[slot]+=er*5/16;nextG[slot]+=eg*5/16;nextB[slot]+=eb*5/16;
+     if(x+1<W){nextR[slot+1]+=er/16;nextG[slot+1]+=eg/16;nextB[slot+1]+=eb/16;}
+    }
+   }
+   [curR,nextR]=[nextR,curR];[curG,nextG]=[nextG,curG];[curB,nextB]=[nextB,curB];
+   nextR.fill(0);nextG.fill(0);nextB.fill(0);
+  }
+ }
+ return out;
+}
+function renderFramePreview(frame){
+ const ctx=$('preview').getContext('2d'),display=ctx.createImageData(W,H);
+ const byCode=new Map(colors.map(c=>[c.code,c]));
+ for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+  const p=x*H+y,value=frame[p>>1],code=(p&1)?(value&15):(value>>4),color=byCode.get(code)||colors[1];
+  const i=(y*W+x)*4;display.data[i]=color.r;display.data[i+1]=color.g;display.data[i+2]=color.b;display.data[i+3]=255;
+ }
+ ctx.putImageData(display,0,0);
+}
+function renderSourcePreview(){
+ if(!cropImageCanvas)return;
+ const data=applyAdjustments(),ctx=$('preview').getContext('2d'),display=ctx.createImageData(W,H);
+ for(let i=0;i<data.length;i+=4){display.data[i]=data[i];display.data[i+1]=data[i+1];display.data[i+2]=data[i+2];display.data[i+3]=255;}
+ ctx.putImageData(display,0,0);
+}
+function buildTestFrame(){
+ const out=new Uint8Array(FRAME_BYTES);
+ for(let y=0;y<H;y++){
+  const color=colors[Math.min(colors.length-1,Math.floor(y*colors.length/H))];
+  for(let x=0;x<W;x++){
+   storePixel(out,x,y,color.code);
+  }
+ }
+ return out;
+}
+$('reloadPreview').onclick=()=>{
+ if(!cropImageCanvas){alert('请先选择照片并完成裁切。');return;}
+ loadedFrame=buildFrame();previewNeedsReload=false;previewMode='epd';renderFramePreview(loadedFrame);
+ $('step3status').textContent='预览已加载';$('step4status').textContent='可以发送';
+ $('send').disabled=!(dataChar&&imageReady&&loadedFrame);$('showSource').classList.add('secondary');$('showEpd').classList.remove('secondary');
+ log('六色发送预览已生成。预览像素直接从待发送帧解码，和手机端实际发送的数据一致。');
+};
+$('showSource').onclick=()=>{if(!cropImageCanvas){log('请先导入并裁切照片。');return;}previewMode='source';renderSourcePreview();$('showSource').classList.remove('secondary');$('showEpd').classList.add('secondary');};
+$('showEpd').onclick=()=>{if(!loadedFrame){log('请先生成六色发送预览。');return;}previewMode='epd';renderFramePreview(loadedFrame);$('showEpd').classList.remove('secondary');$('showSource').classList.add('secondary');};
+$('testPreview').onclick=()=>{testFrame=buildTestFrame();previewMode='test';renderFramePreview(testFrame);$('showEpd').classList.add('secondary');$('showSource').classList.add('secondary');log('已显示黑、白、黄、红、蓝、绿六色色带。点击“发送六色测试图”可直接检查墨水屏面板。');};
+$('resetAdjust').onclick=()=>{
+ $('brightness').value=0;$('contrast').value=100;$('saturation').value=100;
+ setAdjustmentOutputs();log('调整参数已重置。点击“重新加载预览”查看效果。');
+};
+async function connect(){
+ if(!navigator.bluetooth){alert('浏览器不支持 Web Bluetooth。请使用 Android Chrome，并从 HTTPS 网页打开。');return;}
+ try{
+  device=await navigator.bluetooth.requestDevice({filters:[{name:'JD7601-EPAPER'}],optionalServices:[SERVICE]});
+  device.addEventListener('gattserverdisconnected',()=>{
+   server=null;controlChar=dataChar=statusChar=null;setConnected(false,'设备已断开');
+   log('BLE 已断开。');
+  });
+  server=await device.gatt.connect();const svc=await server.getPrimaryService(SERVICE);
+  controlChar=await svc.getCharacteristic(CONTROL);dataChar=await svc.getCharacteristic(DATA);
+  statusChar=await svc.getCharacteristic(STATUS);
+  setConnected(true,'已连接：'+(device.name||'JD7601-EPAPER'));
+  $('send').disabled=!(imageReady&&loadedFrame&&!previewNeedsReload);
+  $('sendTest').disabled=false;
+  log('BLE 连接成功。可以选择照片并传图。');
+ }catch(e){setConnected(false,'连接失败');log('连接失败：'+e.name+' — '+e.message);}
+}
+$('connect').onclick=connect;
+$('disconnect').onclick=()=>{if(device?.gatt?.connected)device.gatt.disconnect()};
+async function sendFrame(frame,label,button){
+ if(!controlChar||!dataChar){alert('请先连接墨水屏设备。');return;}
+ button.disabled=true;$('send').disabled=true;$('sendTest').disabled=true;$('progress').value=0;
+ const total=frame.length,candidates=[240,192,128,64,16];
+ const noResponse=!!(dataChar.properties.writeWithoutResponse&&typeof dataChar.writeValueWithoutResponse==='function');
+ let lastError=null;
+ try{
+  for(let attempt=0;attempt<candidates.length;attempt++){
+   const chunk=candidates[attempt];let offset=0;
+   try{
+    await controlChar.writeValueWithResponse(new Uint8Array([START_COMMAND]));
+    while(offset<total){
+     const n=Math.min(chunk,total-offset),packet=new Uint8Array(4+n);
+     packet[0]=offset&255;packet[1]=(offset>>>8)&255;packet[2]=(offset>>>16)&255;packet[3]=(offset>>>24)&255;
+     packet.set(frame.subarray(offset,offset+n),4);
+     if(noResponse)await dataChar.writeValueWithoutResponse(packet);
+     else await dataChar.writeValueWithResponse(packet);
+     offset+=n;
+     const updateEvery=Math.max(chunk*8,Math.ceil(total/100));
+     if(offset%updateEvery<chunk||offset===total){
+      const pct=Math.floor(offset*100/total);$('progress').value=pct;
+      $('progressText').textContent=`${label}发送中 ${pct}%（${offset.toLocaleString()} / ${total.toLocaleString()} 字节，单包 ${n+4} 字节）`;
+     }
+    }
+    lastError=null;break;
+   }catch(e){
+    lastError=e;
+    if(attempt+1<candidates.length){
+     $('progress').value=0;
+     $('progressText').textContent=`当前 BLE 写入长度不兼容，正在重试较小分包（${e.name}）…`;
+    }
+   }
+  }
+  if(lastError)throw lastError;
+  $('progressText').textContent=`${label}传输完成，设备开始刷新。请等待约 30–40 秒，不要断电。`;
+  $('step4status').textContent='传输完成';log(`${label}数据发送完成，等待墨水屏刷新。`);
+ }catch(e){$('progressText').textContent='传输失败';log('发送失败：'+e.name+' — '+e.message+'。请重新连接后重试。');}
+ finally{
+  $('send').disabled=!(dataChar&&imageReady&&loadedFrame&&!previewNeedsReload);
+  $('sendTest').disabled=!dataChar;
+ }
+}
+$('send').onclick=()=>{
+ if(!loadedFrame||!imageReady||previewNeedsReload){alert('请先完成裁切并生成最新的六色预览。');return;}
+ sendFrame(loadedFrame,'当前图像',$('send'));
+};
+$('sendTest').onclick=()=>{testFrame=buildTestFrame();previewMode='test';renderFramePreview(testFrame);sendFrame(testFrame,'六色测试图',$('sendTest'));};
+setAdjustmentOutputs();
+})();
+</script>
+</body>
+</html>
