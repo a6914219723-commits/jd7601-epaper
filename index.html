@@ -423,11 +423,27 @@ async function sendFrame(frame,label,button){
   $('sendTest').disabled=!dataChar;
  }
 }
+// 仅旋转发送数据 180°，手机端预览保持原方向。
+function rotateFrame180(frame){
+ const rotated=new Uint8Array(frame.length);
+ const pixelCount=W*H;
+ // 图像按列存储：p=x*H+y；4bpp 每字节存两个像素。
+ // 180°旋转等价于反转所有像素顺序，同时保留每个像素的 4bit 色码。
+ for(let p=0;p<pixelCount;p++){
+  const srcP=pixelCount-1-p;
+  const srcByte=frame[srcP>>1];
+  const code=(srcP&1)?(srcByte&0x0F):(srcByte>>4);
+  const dstByte=p>>1;
+  if((p&1)===0)rotated[dstByte]=code<<4;
+  else rotated[dstByte]|=code;
+ }
+ return rotated;
+}
 $('send').onclick=()=>{
  if(!loadedFrame||!imageReady||previewNeedsReload){alert('请先完成裁切并生成最新的六色预览。');return;}
- sendFrame(loadedFrame,'当前图像',$('send'));
+ sendFrame(rotateFrame180(loadedFrame),'当前图像（发送旋转180°）',$('send'));
 };
-$('sendTest').onclick=()=>{testFrame=buildTestFrame();previewMode='test';renderFramePreview(testFrame);sendFrame(testFrame,'六色测试图',$('sendTest'));};
+$('sendTest').onclick=()=>{testFrame=buildTestFrame();previewMode='test';renderFramePreview(testFrame);sendFrame(rotateFrame180(testFrame),'六色测试图（发送旋转180°）',$('sendTest'));};
 setAdjustmentOutputs();
 })();
 </script>
