@@ -373,7 +373,7 @@ async function refreshBattery(){
  try{
   const value=await statusChar.readValue();
   const text=new TextDecoder().decode(value);
-  const mvMatch=text.match(/batt_mv=(\\d+)/),pctMatch=text.match(/batt_pct=(\\d+)/);
+  const mvMatch=text.match(/batt_mv=(\d+)/),pctMatch=text.match(/batt_pct=(\d+)/);
   if(!mvMatch||!pctMatch){$('batteryText').textContent='固件不支持电量回传';return;}
   // 固件 batt_mv 当前按 ADC 校准电压(mV)乘以 11 回传；先还原 ADC 节点电压，再按用户万用表参考表校准电池电压。
   const reportedMv=Number(mvMatch[1]);
