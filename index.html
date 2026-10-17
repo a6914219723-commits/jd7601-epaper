@@ -66,6 +66,7 @@ button:focus-visible,input:focus-visible{outline:3px solid #9cb8ff;outline-offse
   <div class="cardhead"><div class="num">1</div><div><h2>设备连接</h2><p class="desc">连接已上电的 ESP32-S3 墨水屏设备。</p></div><span class="stepstatus" id="step1status">未连接</span></div>
   <div class="row"><button id="connect">连接设备</button><button id="disconnect" class="secondary" disabled>断开连接</button></div>
   <div class="status"><span class="dot" id="connDot"></span><span id="connText">尚未连接 · 设备名 JD7601-EPAPER</span></div>
+  <div class="status" id="batteryStatus"><span>电池</span><span id="batteryIcon" aria-label="电量">▱</span><strong id="batteryText">等待读取</strong><span class="note" id="batteryVoltage"></span></div>
 </section>
 
 <section class="card" id="step2">
@@ -131,6 +132,7 @@ let device=null,server=null,controlChar=null,dataChar=null,statusChar=null;
 let originalImage=null,cropImageCanvas=null,loadedFrame=null,imageReady=false;
 let cropScale=1,cropX=0,cropY=0,cropBase=1,rotation=0,drag=null,previewNeedsReload=true;
 let previewMode='epd',testFrame=null;
+let batteryPollTimer=null;
 
 function log(s){$('log').textContent=s}
 function setConnected(yes,text){
@@ -362,18 +364,42 @@ $('resetAdjust').onclick=()=>{
  $('brightness').value=0;$('contrast').value=100;$('saturation').value=100;
  setAdjustmentOutputs();log('调整参数已重置。点击“重新加载预览”查看效果。');
 };
+function batteryLevelIcon(pct){
+ const bars=Math.max(0,Math.min(10,Math.round(pct/10)));
+ return '▰'.repeat(bars)+'▱'.repeat(10-bars);
+}
+async function refreshBattery(){
+ if(!statusChar)return;
+ try{
+  const value=await statusChar.readValue();
+  const text=new TextDecoder().decode(value);
+  const mvMatch=text.match(/batt_mv=(\\d+)/),pctMatch=text.match(/batt_pct=(\\d+)/);
+  if(!mvMatch||!pctMatch){$('batteryText').textContent='固件不支持电量回传';return;}
+  // 固件 batt_mv 当前按 ADC 校准电压(mV)乘以 11 回传；先还原 ADC 节点电压，再按用户万用表参考表校准电池电压。
+  const reportedMv=Number(mvMatch[1]);
+  const adcV=reportedMv/11000;
+  // 基于用户提供的 14 组实测数据进行线性校准：Vbat = 1.91344 * Vadc + 0.56736
+  const batteryV=1.91344*adcV+0.56736;
+  // 用户参考数据范围 3.43V~4.20V，映射为 0~100% 的十档显示。
+  const level=Math.max(0,Math.min(100,Math.round((batteryV-3.43)/(4.20-3.43)*100/10)*10));
+  $('batteryIcon').textContent=batteryLevelIcon(level);
+  $('batteryText').textContent=level+'%（10档）';
+  $('batteryVoltage').textContent=batteryV.toFixed(2)+' V';
+ }catch(e){$('batteryText').textContent='读取失败';}
+}
 async function connect(){
  if(!navigator.bluetooth){alert('浏览器不支持 Web Bluetooth。请使用 Android Chrome，并从 HTTPS 网页打开。');return;}
  try{
   device=await navigator.bluetooth.requestDevice({filters:[{name:'JD7601-EPAPER'}],optionalServices:[SERVICE]});
   device.addEventListener('gattserverdisconnected',()=>{
-   server=null;controlChar=dataChar=statusChar=null;setConnected(false,'设备已断开');
+   server=null;controlChar=dataChar=statusChar=null;if(batteryPollTimer){clearInterval(batteryPollTimer);batteryPollTimer=null;} $('batteryText').textContent='未连接';$('batteryVoltage').textContent='';setConnected(false,'设备已断开');
    log('BLE 已断开。');
   });
   server=await device.gatt.connect();const svc=await server.getPrimaryService(SERVICE);
   controlChar=await svc.getCharacteristic(CONTROL);dataChar=await svc.getCharacteristic(DATA);
   statusChar=await svc.getCharacteristic(STATUS);
   setConnected(true,'已连接：'+(device.name||'JD7601-EPAPER'));
+  await refreshBattery();if(batteryPollTimer)clearInterval(batteryPollTimer);batteryPollTimer=setInterval(refreshBattery,5000);
   $('send').disabled=!(imageReady&&loadedFrame&&!previewNeedsReload);
   $('sendTest').disabled=false;
   log('BLE 连接成功。可以选择照片并传图。');
